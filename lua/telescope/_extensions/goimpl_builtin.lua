@@ -1,0 +1,177 @@
+#! /usr/bin/env lua
+--
+-- goimpl_buildin.lua
+-- Copyright (C) 2021 edolphin <dngfngyang@gmail.com>
+--
+-- Distributed under terms of the MIT license.
+--
+
+local actions = require'telescope.actions'
+local actions_set = require'telescope.actions.set'
+local conf = require'telescope.config'.values
+local finders = require'telescope.finders'
+local make_entry = require "telescope.make_entry"
+local pickers = require'telescope.pickers'
+local a = require "plenary.async_lib"
+local async, await = a.async, a.await
+local channel = a.util.channel
+local utils = require'telescope.utils'
+local ts_utils = require 'nvim-treesitter.ts_utils'
+
+local M = {}
+
+-- Acording to LSP spec, if the client set "symbolKind.valueSet",
+-- the client must handle it properly even if it receives a value outside the specification.
+-- https://microsoft.github.io/language-server-protocol/specifications/specification-current/#textDocument_documentSymbol
+local function _get_symbol_kind_name(symbol_kind)
+	return vim.lsp.protocol.SymbolKind[symbol_kind] or "Unknown"
+end
+
+-- containerName
+--- Converts symbols to quickfix list items.
+--- copyed from neovim runtime inorder to add the containerName from symbol
+---
+--@param symbols DocumentSymbol[] or SymbolInformation[]
+local function symbols_to_items(symbols, bufnr)
+	--@private
+	local function _symbols_to_items(_symbols, _items, _bufnr)
+		for _, symbol in ipairs(_symbols) do
+			if symbol.location then -- SymbolInformation type
+				local range = symbol.location.range
+				local kind = _get_symbol_kind_name(symbol.kind)
+				table.insert(_items, {
+					filename = vim.uri_to_fname(symbol.location.uri),
+					lnum = range.start.line + 1,
+					col = range.start.character + 1,
+					kind = kind,
+					text = '['..kind..'] '..symbol.name,
+					containerName = symbol.containerName
+				})
+			elseif symbol.selectionRange then -- DocumentSymbole type
+				local kind = M._get_symbol_kind_name(symbol.kind)
+				table.insert(_items, {
+					-- bufnr = _bufnr,
+					filename = vim.api.nvim_buf_get_name(_bufnr),
+					lnum = symbol.selectionRange.start.line + 1,
+					col = symbol.selectionRange.start.character + 1,
+					kind = kind,
+					text = '['..kind..'] '..symbol.name,
+					containerName = symbol.containerName
+				})
+				if symbol.children then
+					for _, v in ipairs(_symbols_to_items(symbol.children, _items, _bufnr)) do
+						vim.list_extend(_items, v)
+					end
+				end
+			end
+		end
+		return _items
+	end
+	return _symbols_to_items(symbols, {}, bufnr)
+end
+
+local function get_workspace_symbols_requester(bufnr, opts)
+	local cancel = function() end
+
+	return async(function(prompt)
+		local tx, rx = channel.oneshot()
+		cancel()
+		_, cancel = vim.lsp.buf_request(bufnr, "workspace/symbol", { query = prompt }, tx)
+
+		local err, _, results_lsp = await(rx())
+		assert(not err, err)
+
+		local locations = symbols_to_items(results_lsp or {}, bufnr) or {}
+		locations = utils.filter_symbols(locations, opts) or {}
+		return locations
+	end)
+end
+
+local function split(inputstr, sep)
+	if sep == nil then
+		sep = "%s"
+	end
+	local t={}
+	for str in string.gmatch(inputstr, "([^"..sep.."]+)") do
+		table.insert(t, str)
+	end
+	return t
+end
+
+local function handle_job_data(data)
+	if not data then
+		return nil
+	end
+	-- Because the nvim.stdout's data will have an extra empty line at end on some OS (e.g. maxOS), we should remove it.
+	if data[#data] == '' then
+		table.remove(data, #data)
+	end
+	if #data < 1 then
+		return nil
+	end
+	return data
+end
+
+local function goimpl(tsnode, interface)
+	local setup = "impl"
+
+	local rec2 = ts_utils.get_node_text(tsnode)[1]
+	local rec1 = string.lower(string.sub(rec2, 1, 2))
+
+	setup = setup .. " '" .. rec1 .. " *" .. rec2 .. "' " .. interface
+	local data = vim.fn.systemlist(setup)
+
+	data = handle_job_data(data)
+	if not data then
+		return
+	end
+
+	local _, _, pos, _ = tsnode:parent():parent():range()
+	pos = pos+1
+	vim.fn.append(pos, "") -- insert an empty line
+	pos = pos+1
+	vim.fn.append(pos, data)
+end
+
+M.goimpl = function(opts)
+	opts = opts or {}
+	local curr_bufnr = vim.api.nvim_get_current_buf()
+
+	local tsnode = ts_utils.get_node_at_cursor()
+	if tsnode:type() ~= 'type_identifier' or tsnode:parent():type() ~= 'type_spec'
+		or tsnode:parent():parent():type() ~= 'type_declaration' then
+		print("No type identifier found under cursor")
+		return
+	end
+
+	local typeNode = tsnode:parent():parent():child(1):child(0)
+
+	pickers.new(opts, {
+		prompt_title = "Go Impl",
+		finder = finders.new_dynamic {
+			entry_maker = opts.entry_maker or make_entry.gen_from_lsp_symbols(opts),
+			fn = get_workspace_symbols_requester(curr_bufnr, {symbols = 'interface'}),
+		},
+		previewer = conf.qflist_previewer(opts),
+		sorter = conf.generic_sorter(),
+		attach_mappings = function(prompt_bufnr)
+			actions_set.select:replace(function(_, type)
+				local entry = actions.get_selected_entry()
+				actions.close(prompt_bufnr)
+				if not entry then
+					return
+				end
+
+				-- if prompt is eg: sort.Interface, the symbol_name will contain the sort package name,
+				-- so only use the real interface name
+				local symbol_name = split(entry.symbol_name, ".")
+				symbol_name = symbol_name[#symbol_name]
+
+				goimpl(typeNode, entry.value.containerName .. "." .. symbol_name)
+			end)
+			return true
+		end,
+	}):find()
+end
+
+return M
