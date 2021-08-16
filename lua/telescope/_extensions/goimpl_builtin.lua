@@ -112,18 +112,28 @@ local function handle_job_data(data)
 	return data
 end
 
-local function goimpl(tsnode, interface)
-	local setup = "impl"
-
+local function goimpl(tsnode, packageName, interface)
 	local rec2 = ts_utils.get_node_text(tsnode)[1]
 	local rec1 = string.lower(string.sub(rec2, 1, 2))
 
-	setup = setup .. " '" .. rec1 .. " *" .. rec2 .. "' " .. interface
+	local setup = 'impl' .. " '" .. rec1 .. " *" .. rec2 .. "' " .. packageName .. '.' .. interface
 	local data = vim.fn.systemlist(setup)
 
 	data = handle_job_data(data)
-	if not data then
+	if not data or #data == 0 then
 		return
+	end
+
+	-- if not found the '$packageName.$interface' type, then try without the packageName
+	-- this works when in a main package, it's containerName will return the directory name which the interface file exist in.
+	if string.find(data[1], "unrecognized interface:") then
+		setup = 'impl' .. " '" .. rec1 .. " *" .. rec2 .. "' " .. interface
+		data = vim.fn.systemlist(setup)
+
+		data = handle_job_data(data)
+		if not data or #data == 0 then
+			return
+		end
 	end
 
 	local _, _, pos, _ = tsnode:parent():parent():range()
@@ -167,7 +177,7 @@ M.goimpl = function(opts)
 				local symbol_name = split(entry.symbol_name, ".")
 				symbol_name = symbol_name[#symbol_name]
 
-				goimpl(typeNode, entry.value.containerName .. "." .. symbol_name)
+				goimpl(typeNode, entry.value.containerName, symbol_name)
 			end)
 			return true
 		end,
