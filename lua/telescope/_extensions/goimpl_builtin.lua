@@ -7,16 +7,15 @@
 --
 
 local actions = require'telescope.actions'
+local state = require'telescope.actions.state'
 local actions_set = require'telescope.actions.set'
 local conf = require'telescope.config'.values
 local finders = require'telescope.finders'
 local make_entry = require "telescope.make_entry"
 local pickers = require'telescope.pickers'
-local a = require "plenary.async_lib"
-local async, await = a.async, a.await
-local channel = a.util.channel
 local utils = require'telescope.utils'
 local ts_utils = require 'nvim-treesitter.ts_utils'
+local log = require "telescope.log"
 
 local M = {}
 
@@ -71,20 +70,15 @@ local function symbols_to_items(symbols, bufnr)
 end
 
 local function get_workspace_symbols_requester(bufnr, opts)
-	local cancel = function() end
+	return function(prompt)
+		local results_lsp, err = vim.lsp.buf_request_sync(bufnr, "workspace/symbol", { query = prompt }, opts.timeout or 10000)
 
-	return async(function(prompt)
-		local tx, rx = channel.oneshot()
-		cancel()
-		_, cancel = vim.lsp.buf_request(bufnr, "workspace/symbol", { query = prompt }, tx)
-
-		local err, _, results_lsp = await(rx())
 		assert(not err, err)
 
-		local locations = symbols_to_items(results_lsp or {}, bufnr) or {}
+		local locations = symbols_to_items(results_lsp and results_lsp[1] and results_lsp[1].result  or {}, bufnr) or {}
 		locations = utils.filter_symbols(locations, opts) or {}
 		return locations
-	end)
+	end
 end
 
 local function split(inputstr, sep)
@@ -126,7 +120,7 @@ local function goimpl(tsnode, packageName, interface)
 
 	-- if not found the '$packageName.$interface' type, then try without the packageName
 	-- this works when in a main package, it's containerName will return the directory name which the interface file exist in.
-	if string.find(data[1], "unrecognized interface:") then
+	if string.find(data[1], "unrecognized interface:") or string.find(data[1], "couldn't find") then
 		setup = 'impl' .. " '" .. rec1 .. " *" .. rec2 .. "' " .. interface
 		data = vim.fn.systemlist(setup)
 
@@ -166,7 +160,7 @@ M.goimpl = function(opts)
 		sorter = conf.generic_sorter(),
 		attach_mappings = function(prompt_bufnr)
 			actions_set.select:replace(function(_, type)
-				local entry = actions.get_selected_entry()
+				local entry = state.get_selected_entry()
 				actions.close(prompt_bufnr)
 				if not entry then
 					return
