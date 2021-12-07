@@ -110,7 +110,10 @@ local function goimpl(tsnode, packageName, interface)
 	local rec2 = ts_utils.get_node_text(tsnode)[1]
 	local rec1 = string.lower(string.sub(rec2, 1, 2))
 
-	local setup = 'impl' .. " '" .. rec1 .. " *" .. rec2 .. "' " .. packageName .. '.' .. interface
+	-- get the package source directory
+	local dirname = vim.fn.fnameescape(vim.fn.expand('%:p:h'))
+
+	local setup = 'impl' .. ' -dir ' .. dirname  .. " '" .. rec1 .. " *" .. rec2 .. "' " .. packageName .. '.' .. interface
 	local data = vim.fn.systemlist(setup)
 
 	data = handle_job_data(data)
@@ -121,7 +124,7 @@ local function goimpl(tsnode, packageName, interface)
 	-- if not found the '$packageName.$interface' type, then try without the packageName
 	-- this works when in a main package, it's containerName will return the directory name which the interface file exist in.
 	if string.find(data[1], "unrecognized interface:") or string.find(data[1], "couldn't find") then
-		setup = 'impl' .. " '" .. rec1 .. " *" .. rec2 .. "' " .. interface
+		setup = 'impl' .. ' -dir ' .. dirname  .. " '" .. rec1 .. " *" .. rec2 .. "' " .. interface
 		data = vim.fn.systemlist(setup)
 
 		data = handle_job_data(data)
