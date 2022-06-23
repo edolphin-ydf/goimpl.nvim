@@ -75,7 +75,7 @@ local function get_workspace_symbols_requester(bufnr, opts)
 
 		assert(not err, err)
 
-		local locations = symbols_to_items(results_lsp and results_lsp[1] and results_lsp[1].result  or {}, bufnr) or {}
+		local locations = symbols_to_items(results_lsp and results_lsp[2] and results_lsp[2].result  or {}, bufnr) or {}
 		locations = utils.filter_symbols(locations, opts) or {}
 		return locations
 	end
