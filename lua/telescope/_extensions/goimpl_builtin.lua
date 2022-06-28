@@ -15,6 +15,7 @@ local make_entry = require "telescope.make_entry"
 local pickers = require'telescope.pickers'
 local utils = require'telescope.utils'
 local ts_utils = require 'nvim-treesitter.ts_utils'
+local query = require 'vim.treesitter.query'
 local log = require "telescope.log"
 
 local M = {}
@@ -75,8 +76,10 @@ local function get_workspace_symbols_requester(bufnr, opts)
 
 		assert(not err, err)
 
-		local locations = symbols_to_items(results_lsp and results_lsp[2] and results_lsp[2].result  or {}, bufnr) or {}
-		locations = utils.filter_symbols(locations, opts) or {}
+		local locations = symbols_to_items(results_lsp and results_lsp[1] and results_lsp[1].result or {}, bufnr)
+		if next(locations) ~= nil then
+			locations = utils.filter_symbols(locations, opts) or {}
+		end
 		return locations
 	end
 end
@@ -107,7 +110,7 @@ local function handle_job_data(data)
 end
 
 local function goimpl(tsnode, packageName, interface)
-	local rec2 = ts_utils.get_node_text(tsnode)[1]
+	local rec2 = query.get_node_text(tsnode, 0)
 	local rec1 = string.lower(string.sub(rec2, 1, 2))
 
 	-- get the package source directory
