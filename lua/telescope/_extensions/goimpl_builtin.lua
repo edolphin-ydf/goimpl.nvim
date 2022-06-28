@@ -13,10 +13,8 @@ local conf = require'telescope.config'.values
 local finders = require'telescope.finders'
 local make_entry = require "telescope.make_entry"
 local pickers = require'telescope.pickers'
-local utils = require'telescope.utils'
 local ts_utils = require 'nvim-treesitter.ts_utils'
 local query = require 'vim.treesitter.query'
-local log = require "telescope.log"
 
 local M = {}
 
@@ -32,34 +30,37 @@ end
 --- copyed from neovim runtime inorder to add the containerName from symbol
 ---
 --@param symbols DocumentSymbol[] or SymbolInformation[]
-local function symbols_to_items(symbols, bufnr)
+local function interfaces_to_items(symbols, bufnr)
 	--@private
-	local function _symbols_to_items(_symbols, _items, _bufnr)
+	local function _interfaces_to_items(_symbols, _items, _bufnr)
 		for _, symbol in ipairs(_symbols) do
 			if symbol.location then -- SymbolInformation type
 				local range = symbol.location.range
 				local kind = _get_symbol_kind_name(symbol.kind)
-				table.insert(_items, {
-					filename = vim.uri_to_fname(symbol.location.uri),
-					lnum = range.start.line + 1,
-					col = range.start.character + 1,
-					kind = kind,
-					text = '['..kind..'] '..symbol.name,
-					containerName = symbol.containerName
-				})
+				if kind == "Interface" then
+					table.insert(_items, {
+						filename = vim.uri_to_fname(symbol.location.uri),
+						lnum = range.start.line + 1,
+						col = range.start.character + 1,
+						kind = kind,
+						text = '['..kind..'] '..symbol.name,
+						containerName = symbol.containerName
+					})
+				end
 			elseif symbol.selectionRange then -- DocumentSymbole type
 				local kind = M._get_symbol_kind_name(symbol.kind)
-				table.insert(_items, {
-					-- bufnr = _bufnr,
-					filename = vim.api.nvim_buf_get_name(_bufnr),
-					lnum = symbol.selectionRange.start.line + 1,
-					col = symbol.selectionRange.start.character + 1,
-					kind = kind,
-					text = '['..kind..'] '..symbol.name,
-					containerName = symbol.containerName
-				})
+				if kind == "Interface" then
+					table.insert(_items, {
+						filename = vim.api.nvim_buf_get_name(_bufnr),
+						lnum = symbol.selectionRange.start.line + 1,
+						col = symbol.selectionRange.start.character + 1,
+						kind = kind,
+						text = '['..kind..'] '..symbol.name,
+						containerName = symbol.containerName
+					})
+				end
 				if symbol.children then
-					for _, v in ipairs(_symbols_to_items(symbol.children, _items, _bufnr)) do
+					for _, v in ipairs(_interfaces_to_items(symbol.children, _items, _bufnr)) do
 						vim.list_extend(_items, v)
 					end
 				end
@@ -67,7 +68,7 @@ local function symbols_to_items(symbols, bufnr)
 		end
 		return _items
 	end
-	return _symbols_to_items(symbols, {}, bufnr)
+	return _interfaces_to_items(symbols, {}, bufnr)
 end
 
 local function get_workspace_symbols_requester(bufnr, opts)
@@ -76,10 +77,7 @@ local function get_workspace_symbols_requester(bufnr, opts)
 
 		assert(not err, err)
 
-		local locations = symbols_to_items(results_lsp and results_lsp[1] and results_lsp[1].result or {}, bufnr)
-		if next(locations) ~= nil then
-			locations = utils.filter_symbols(locations, opts) or {}
-		end
+		local locations = interfaces_to_items(results_lsp and results_lsp[1] and results_lsp[1].result or {}, bufnr) or {}
 		return locations
 	end
 end
@@ -160,12 +158,12 @@ M.goimpl = function(opts)
 		prompt_title = "Go Impl",
 		finder = finders.new_dynamic {
 			entry_maker = opts.entry_maker or make_entry.gen_from_lsp_symbols(opts),
-			fn = get_workspace_symbols_requester(curr_bufnr, {symbols = 'interface'}),
+			fn = get_workspace_symbols_requester(curr_bufnr, opts),
 		},
 		previewer = conf.qflist_previewer(opts),
 		sorter = conf.generic_sorter(),
 		attach_mappings = function(prompt_bufnr)
-			actions_set.select:replace(function(_, type)
+			actions_set.select:replace(function(_, _)
 				local entry = state.get_selected_entry()
 				actions.close(prompt_bufnr)
 				if not entry then
