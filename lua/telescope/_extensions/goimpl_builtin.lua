@@ -15,6 +15,7 @@ local make_entry = require "telescope.make_entry"
 local pickers = require'telescope.pickers'
 local utils = require'telescope.utils'
 local ts_utils = require 'nvim-treesitter.ts_utils'
+local channel = require("plenary.async.control").channel
 local log = require "telescope.log"
 
 local M = {}
@@ -70,13 +71,20 @@ local function symbols_to_items(symbols, bufnr)
 end
 
 local function get_workspace_symbols_requester(bufnr, opts)
+	local cancel = function() end
 	return function(prompt)
-		local results_lsp, err = vim.lsp.buf_request_sync(bufnr, "workspace/symbol", { query = prompt }, opts.timeout or 10000)
+		local tx, rx = channel.oneshot()
+		cancel()
+		_, cancel = vim.lsp.buf_request(bufnr, "workspace/symbol", { query = prompt }, tx)
 
+		-- Handle 0.5 / 0.5.1 handler situation
+		local err, res = rx()
 		assert(not err, err)
 
-		local locations = symbols_to_items(results_lsp and results_lsp[2] and results_lsp[2].result  or {}, bufnr) or {}
-		locations = utils.filter_symbols(locations, opts) or {}
+		local locations = symbols_to_items(res or {}, bufnr) or {}
+		if not vim.tbl_isempty(locations) then
+			locations = utils.filter_symbols(locations, opts) or {}
+		end
 		return locations
 	end
 end
