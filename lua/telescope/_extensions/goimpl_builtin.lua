@@ -84,9 +84,6 @@ local function get_workspace_symbols_requester(bufnr, opts)
 		assert(not err, err)
 
 		local locations = interfaces_to_items(res or {}, bufnr) or {}
-		if not vim.tbl_isempty(locations) then
-			locations = utils.filter_symbols(locations, opts) or {}
-		end
 		return locations
 	end
 end
