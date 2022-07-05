@@ -13,9 +13,10 @@ local conf = require'telescope.config'.values
 local finders = require'telescope.finders'
 local make_entry = require "telescope.make_entry"
 local pickers = require'telescope.pickers'
+local utils = require'telescope.utils'
 local ts_utils = require 'nvim-treesitter.ts_utils'
-local query = require 'vim.treesitter.query'
 local channel = require("plenary.async.control").channel
+local log = require "telescope.log"
 
 local M = {}
 
@@ -31,37 +32,34 @@ end
 --- copyed from neovim runtime inorder to add the containerName from symbol
 ---
 --@param symbols DocumentSymbol[] or SymbolInformation[]
-local function interfaces_to_items(symbols, bufnr)
+local function symbols_to_items(symbols, bufnr)
 	--@private
-	local function _interfaces_to_items(_symbols, _items, _bufnr)
+	local function _symbols_to_items(_symbols, _items, _bufnr)
 		for _, symbol in ipairs(_symbols) do
 			if symbol.location then -- SymbolInformation type
 				local range = symbol.location.range
 				local kind = _get_symbol_kind_name(symbol.kind)
-				if kind == "Interface" then
-					table.insert(_items, {
-						filename = vim.uri_to_fname(symbol.location.uri),
-						lnum = range.start.line + 1,
-						col = range.start.character + 1,
-						kind = kind,
-						text = '['..kind..'] '..symbol.name,
-						containerName = symbol.containerName
-					})
-				end
+				table.insert(_items, {
+					filename = vim.uri_to_fname(symbol.location.uri),
+					lnum = range.start.line + 1,
+					col = range.start.character + 1,
+					kind = kind,
+					text = '['..kind..'] '..symbol.name,
+					containerName = symbol.containerName
+				})
 			elseif symbol.selectionRange then -- DocumentSymbole type
 				local kind = M._get_symbol_kind_name(symbol.kind)
-				if kind == "Interface" then
-					table.insert(_items, {
-						filename = vim.api.nvim_buf_get_name(_bufnr),
-						lnum = symbol.selectionRange.start.line + 1,
-						col = symbol.selectionRange.start.character + 1,
-						kind = kind,
-						text = '['..kind..'] '..symbol.name,
-						containerName = symbol.containerName
-					})
-				end
+				table.insert(_items, {
+					-- bufnr = _bufnr,
+					filename = vim.api.nvim_buf_get_name(_bufnr),
+					lnum = symbol.selectionRange.start.line + 1,
+					col = symbol.selectionRange.start.character + 1,
+					kind = kind,
+					text = '['..kind..'] '..symbol.name,
+					containerName = symbol.containerName
+				})
 				if symbol.children then
-					for _, v in ipairs(_interfaces_to_items(symbol.children, _items, _bufnr)) do
+					for _, v in ipairs(_symbols_to_items(symbol.children, _items, _bufnr)) do
 						vim.list_extend(_items, v)
 					end
 				end
@@ -69,7 +67,7 @@ local function interfaces_to_items(symbols, bufnr)
 		end
 		return _items
 	end
-	return _interfaces_to_items(symbols, {}, bufnr)
+	return _symbols_to_items(symbols, {}, bufnr)
 end
 
 local function get_workspace_symbols_requester(bufnr, opts)
@@ -83,7 +81,7 @@ local function get_workspace_symbols_requester(bufnr, opts)
 		local err, res = rx()
 		assert(not err, err)
 
-		local locations = interfaces_to_items(res or {}, bufnr) or {}
+		local locations = symbols_to_items(res or {}, bufnr) or {}
 		if not vim.tbl_isempty(locations) then
 			locations = utils.filter_symbols(locations, opts) or {}
 		end
@@ -117,7 +115,7 @@ local function handle_job_data(data)
 end
 
 local function goimpl(tsnode, packageName, interface)
-	local rec2 = query.get_node_text(tsnode, 0)
+	local rec2 = ts_utils.get_node_text(tsnode)[1]
 	local rec1 = string.lower(string.sub(rec2, 1, 2))
 
 	-- get the package source directory
@@ -167,12 +165,12 @@ M.goimpl = function(opts)
 		prompt_title = "Go Impl",
 		finder = finders.new_dynamic {
 			entry_maker = opts.entry_maker or make_entry.gen_from_lsp_symbols(opts),
-			fn = get_workspace_symbols_requester(curr_bufnr, opts),
+			fn = get_workspace_symbols_requester(curr_bufnr, {symbols = 'interface'}),
 		},
 		previewer = conf.qflist_previewer(opts),
 		sorter = conf.generic_sorter(),
 		attach_mappings = function(prompt_bufnr)
-			actions_set.select:replace(function(_, _)
+			actions_set.select:replace(function(_, type)
 				local entry = state.get_selected_entry()
 				actions.close(prompt_bufnr)
 				if not entry then
