@@ -33,5 +33,9 @@ vim.api.nvim_set_keymap('n', '<leader>im', [[<cmd>lua require'telescope'.extensi
 ```
 
 
+# FAQ
 
+1. Missing some interfaces?
+
+It's because the gopls search implementation. See [this](https://github.com/edolphin-ydf/goimpl.nvim/issues/5#issuecomment-1175712329)
 
