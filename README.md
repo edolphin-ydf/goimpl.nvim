@@ -6,6 +6,7 @@
 * lsp configured corretlly
 * nvim-telescope/telescope.nvim
 * nvim-treesitter/nvim-treesitter
+* [josharian/impl](https://github.com/josharian/impl)
 
 # Install
 
