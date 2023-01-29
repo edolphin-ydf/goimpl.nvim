@@ -120,7 +120,7 @@ local function goimpl(tsnode, packageName, interface)
 	-- get the package source directory
 	local dirname = vim.fn.fnameescape(vim.fn.expand('%:p:h'))
 
-	local setup = 'impl' .. ' -dir ' .. dirname  .. " '" .. rec1 .. " *" .. rec2 .. "' " .. packageName .. '.' .. interface
+	local setup = 'impl' .. ' -dir ' .. " '" .. dirname .. "' " .. " '" .. rec1 .. " *" .. rec2 .. "' " .. packageName .. '.' .. interface
 	local data = vim.fn.systemlist(setup)
 
 	data = handle_job_data(data)
