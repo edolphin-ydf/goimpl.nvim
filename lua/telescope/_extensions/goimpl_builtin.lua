@@ -14,8 +14,14 @@ local finders = require'telescope.finders'
 local make_entry = require "telescope.make_entry"
 local pickers = require'telescope.pickers'
 local ts_utils = require 'nvim-treesitter.ts_utils'
-local query = require 'vim.treesitter.query'
 local channel = require("plenary.async.control").channel
+
+local ts = vim.treesitter
+local tsq = vim.treesitter.query
+
+local function _get_node_text(node, source, opts)
+  return (ts.get_node_text or tsq.get_node_text)(node, source, opts)
+end
 
 local M = {}
 
@@ -114,7 +120,7 @@ local function handle_job_data(data)
 end
 
 local function goimpl(tsnode, packageName, interface)
-	local rec2 = query.get_node_text(tsnode, 0)
+	local rec2 = _get_node_text(tsnode, 0)
 	local rec1 = string.lower(string.sub(rec2, 1, 2))
 
 	-- get the package source directory
