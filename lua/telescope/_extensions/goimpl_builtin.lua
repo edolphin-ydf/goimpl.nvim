@@ -164,8 +164,6 @@ M.goimpl = function(opts)
 		return
 	end
 
-	local typeNode = tsnode:parent():parent():child(1):child(0)
-
 	pickers.new(opts, {
 		prompt_title = "Go Impl",
 		finder = finders.new_dynamic {
@@ -187,7 +185,7 @@ M.goimpl = function(opts)
 				local symbol_name = split(entry.symbol_name, ".")
 				symbol_name = symbol_name[#symbol_name]
 
-				goimpl(typeNode, entry.value.containerName, symbol_name)
+				goimpl(tsnode, entry.value.containerName, symbol_name)
 			end)
 			return true
 		end,
