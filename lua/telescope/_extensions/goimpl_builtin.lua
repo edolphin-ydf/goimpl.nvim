@@ -169,10 +169,10 @@ local type_parameter_name_query = vim.treesitter.query.parse("go", [[(type_param
   name: (identifier) @type_parameter_name)
   ]])
 
-local function get_type_parameter_name_list(node)
+local function get_type_parameter_name_list(node, buf)
 	local type_parameter_names = {}
-	for _, tnode, _ in type_parameter_name_query:iter_captures(node, 0) do
-		type_parameter_names[#type_parameter_names + 1] = vim.treesitter.get_node_text(tnode, 0)
+	for _, tnode, _ in type_parameter_name_query:iter_captures(node, buf or 0) do
+		type_parameter_names[#type_parameter_names + 1] = vim.treesitter.get_node_text(tnode, buf or 0)
 	end
 
 	return type_parameter_names
@@ -188,12 +188,13 @@ end
 local function load_file_to_buffer(filepath, buf)
 	local file = io.open(filepath, "r")
 	if not file then
-		vim.notify("File not found: " .. filepath, vim.log.levels.WARN, { title = "goimpl.nvim" })
+		logger.info("file not found: " .. filepath)
 		return false
 	end
 
 	local content = file:read("*all")
 	file:close()
+	logger.info(content)
 
 	-- 将内容写入缓冲区
 	vim.api.nvim_buf_set_lines(buf, 0, -1, false, vim.split(content, "\n"))
@@ -205,8 +206,8 @@ local function get_interface_generic_type_parameters(file, interface_name)
 	local buf = vim.api.nvim_create_buf(false, true)
 	local ok, errmsg = pcall(vim.api.nvim_set_option_value, "filetype", "go", { buf = buf })
 	if not ok then
-		local msg = ("Can't set filetype to 'go' (%s). Formatting is canceled"):format(errmsg)
-		vim.notify(msg, vim.log.levels.WARN, { title = "goimpl.nvim" })
+		local msg = ("can't set filetype to 'go' (%s). Formatting is canceled"):format(errmsg)
+		logger.info(msg)
 		return ""
 	end
 
@@ -218,12 +219,12 @@ local function get_interface_generic_type_parameters(file, interface_name)
 	local tree = parser:parse()[1]
 	local root = tree:root()
 
-	for _, node, _ in interface_declaration_query:iter_captures(root, 0) do
+	for _, node, _ in interface_declaration_query:iter_captures(root, buf) do
 		local is_check_interface = false
-		for iid, inode, _ in generyc_type_name_parameters_query:iter_captures(node, 0) do
+		for iid, inode, _ in generyc_type_name_parameters_query:iter_captures(node, buf) do
 			local name = generyc_type_name_parameters_query.captures[iid]
 			if name == "interface.generic.name" then
-				local current_interface_name = vim.treesitter.get_node_text(inode, 0)
+				local current_interface_name = vim.treesitter.get_node_text(inode, buf)
 				if current_interface_name == interface_name then
 					is_check_interface = true
 				end
@@ -231,15 +232,19 @@ local function get_interface_generic_type_parameters(file, interface_name)
 		end
 
 		if is_check_interface then
-			for iid, inode, _ in generyc_type_name_parameters_query:iter_captures(node, 0) do
+			for iid, inode, _ in generyc_type_name_parameters_query:iter_captures(node, buf) do
 				local name = generyc_type_name_parameters_query.captures[iid]
 				if name == "interface.generic.type_parameters" then
-					local type_parameter_names = get_type_parameter_name_list(inode)
+					local type_parameter_names = get_type_parameter_name_list(inode, buf)
+
+					vim.api.nvim_buf_delete(buf, { force = true })
 					return format_type_parameter_name_list(type_parameter_names)
 				end
 			end
 		end
 	end
+
+	vim.api.nvim_buf_delete(buf, { force = true })
 
 	return ""
 end
@@ -261,7 +266,7 @@ local function goimpl(tsnode, packageName, interface, type_parameter_list)
 		" '" ..
 		dirname ..
 		"' " .. " '" .. rec1 .. " *" .. rec2 .. "' '" .. packageName .. '.' .. interface .. type_parameter_list .. "'"
-	logger.debug(setup)
+	logger.info(setup)
 	local data = vim.fn.systemlist(setup)
 
 	data = handle_job_data(data)
