@@ -169,6 +169,22 @@ local type_parameter_name_query = vim.treesitter.query.parse("go", [[(type_param
   name: (identifier) @type_parameter_name)
   ]])
 
+local function get_type_parameter_name_list(node)
+	local type_parameter_names = {}
+	for _, tnode, _ in type_parameter_name_query:iter_captures(node, 0) do
+		type_parameter_names[#type_parameter_names + 1] = vim.treesitter.get_node_text(tnode, 0)
+	end
+
+	return type_parameter_names
+end
+
+local function format_type_parameter_name_list(type_parameter_names)
+	if #type_parameter_names == 0 then
+		return ""
+	end
+	return "[" .. table.concat(type_parameter_names, ", ") .. "]"
+end
+
 local function load_file_to_buffer(filepath, buf)
 	local file = io.open(filepath, "r")
 	if not file then
@@ -218,12 +234,8 @@ local function get_interface_generic_type_parameters(file, interface_name)
 			for iid, inode, _ in generyc_type_name_parameters_query:iter_captures(node, 0) do
 				local name = generyc_type_name_parameters_query.captures[iid]
 				if name == "interface.generic.type_parameters" then
-					local type_parameter_names = {}
-					for _, tnode, _ in type_parameter_name_query:iter_captures(inode, 0) do
-						type_parameter_names[#type_parameter_names + 1] = vim.treesitter.get_node_text(tnode, 0)
-					end
-
-					return "[" .. table.concat(type_parameter_names, ", ") .. "]"
+					local type_parameter_names = get_type_parameter_name_list(inode)
+					return format_type_parameter_name_list(type_parameter_names)
 				end
 			end
 		end
@@ -236,6 +248,8 @@ end
 local function goimpl(tsnode, packageName, interface, type_parameter_list)
 	local rec2 = _get_node_text(tsnode, 0)
 	local rec1 = string.lower(string.sub(rec2, 1, 2))
+	local type_parameter_names = format_type_parameter_name_list(get_type_parameter_name_list(tsnode:parent()))
+	rec2 = rec2 .. type_parameter_names
 
 	-- get the package source directory
 	local dirname = vim.fn.fnameescape(vim.fn.expand('%:p:h'))
@@ -259,7 +273,7 @@ local function goimpl(tsnode, packageName, interface, type_parameter_list)
 	-- this works when in a main package, it's containerName will return the directory name which the interface file exist in.
 	if string.find(data[1], "unrecognized interface:") or string.find(data[1], "couldn't find") then
 		setup = 'impl' ..
-		' -dir ' .. dirname .. " '" .. rec1 .. " *" .. rec2 .. "' '" .. interface .. type_parameter_list .. "'"
+			' -dir ' .. dirname .. " '" .. rec1 .. " *" .. rec2 .. "' '" .. interface .. type_parameter_list .. "'"
 		logger.debug(setup)
 		data = vim.fn.systemlist(setup)
 
@@ -283,7 +297,7 @@ M.goimpl = function(opts)
 	local tsnode = ts_utils.get_node_at_cursor()
 	if tsnode:type() ~= 'type_identifier' or tsnode:parent():type() ~= 'type_spec'
 		or tsnode:parent():parent():type() ~= 'type_declaration' then
-		logger.info("No type identifier found under cursor")
+		print("No type identifier found under cursor")
 		return
 	end
 
