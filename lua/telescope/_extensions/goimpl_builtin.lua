@@ -259,13 +259,24 @@ local function goimpl(tsnode, packageName, interface, type_parameter_list)
 	-- get the package source directory
 	local dirname = vim.fn.fnameescape(vim.fn.expand('%:p:h'))
 
-	local setup = 'cd ' ..
-		dirname ..
-		' && impl' ..
-		' -dir ' ..
-		" '" ..
-		dirname ..
-		"' " .. " '" .. rec1 .. " *" .. rec2 .. "' '" .. packageName .. '.' .. interface .. type_parameter_list .. "'"
+	local setup = 'cd '
+		.. dirname
+		.. ' && impl'
+		.. ' -dir '
+		.. ' "'
+		.. dirname
+		.. '" '
+		.. ' "'
+		.. rec1
+		.. ' *'
+		.. rec2
+		.. '" "'
+		.. packageName
+		.. '.'
+		.. interface
+		.. type_parameter_list
+		.. '"'
+
 	logger.info(setup)
 	local data = vim.fn.systemlist(setup)
 
@@ -277,8 +288,18 @@ local function goimpl(tsnode, packageName, interface, type_parameter_list)
 	-- if not found the '$packageName.$interface' type, then try without the packageName
 	-- this works when in a main package, it's containerName will return the directory name which the interface file exist in.
 	if string.find(data[1], "unrecognized interface:") or string.find(data[1], "couldn't find") then
-		setup = 'impl' ..
-			' -dir ' .. dirname .. " '" .. rec1 .. " *" .. rec2 .. "' '" .. interface .. type_parameter_list .. "'"
+		setup = 'impl'
+			.. ' -dir '
+			.. dirname
+			.. ' "'
+			.. rec1
+			.. ' *'
+			.. rec2
+			.. '" "'
+			.. interface
+			.. type_parameter_list
+			.. '"'
+
 		logger.debug(setup)
 		data = vim.fn.systemlist(setup)
 
