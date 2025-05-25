@@ -15,8 +15,6 @@ with packer
 	use {
 		'edolphin-ydf/goimpl.nvim',
 		requires = {
-			{'nvim-lua/plenary.nvim'},
-			{'nvim-lua/popup.nvim'},
 			{'nvim-telescope/telescope.nvim'},
 			{'nvim-treesitter/nvim-treesitter'},
 		},
