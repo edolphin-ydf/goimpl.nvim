@@ -565,15 +565,15 @@ local function goimpl_async(tsnode, packageName, interface, type_parameter_list,
 				fallback_interface,
 			}
 
-			logger.debug(
-				'Trying fallback command: impl -dir "'
-					.. dirname
-					.. '" "'
-					.. receiver
-					.. '" "'
-					.. fallback_interface
-					.. '"'
-			)
+			-- logger.debug(
+			-- 	'Trying fallback command: impl -dir "'
+			-- 		.. dirname
+			-- 		.. '" "'
+			-- 		.. receiver
+			-- 		.. '" "'
+			-- 		.. fallback_interface
+			-- 		.. '"'
+			-- )
 
 			run_impl_command_async(fallback_args, dirname, function(fallback_result)
 				local fallback_data = fallback_result.stdout and vim.split(fallback_result.stdout, "\n") or {}
