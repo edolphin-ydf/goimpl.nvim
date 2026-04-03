@@ -2,7 +2,7 @@
 
 # Requirements
 
-* neovim >= 5.0
+* neovim >= 0.9.0
 * lsp configured corretlly
 * nvim-telescope/telescope.nvim
 * nvim-treesitter/nvim-treesitter

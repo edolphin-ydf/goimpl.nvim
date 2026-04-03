@@ -13,7 +13,6 @@ local conf = require("telescope.config").values
 local finders = require("telescope.finders")
 local make_entry = require("telescope.make_entry")
 local pickers = require("telescope.pickers")
-local ts_utils = require("nvim-treesitter.ts_utils")
 
 -- Logger using vim.notify
 local logger = {
@@ -54,7 +53,7 @@ local tsq = vim.treesitter.query
 
 -- Helper function to get node text
 local function _get_node_text(node, source, opts)
-	return (ts.get_node_text or tsq.get_node_text)(node, source, opts)
+	return ts.get_node_text(node, source, opts)
 end
 
 local M = {}
@@ -609,7 +608,7 @@ M.goimpl = function(opts)
 		return
 	end
 
-	local tsnode = ts_utils.get_node_at_cursor()
+	local tsnode = vim.treesitter.get_node()
 	if not tsnode then
 		print("No node found under cursor")
 		return
